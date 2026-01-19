@@ -76,3 +76,6 @@ Temporary Items
 # Uncomment if you want to ignore the Xcode project file
 # *.xcodeproj
 # *.xcworkspace
+
+# Xcode scheme files (contain environment variables/API keys)
+*.xcodeproj/xcshareddata/xcschemes/*.xcscheme
