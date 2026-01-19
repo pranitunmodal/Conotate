@@ -19,9 +19,25 @@ struct TopBarView: View {
             Spacer()
             
             HStack(spacing: 16) {
-                Text("Hey, \(appState.userName)")
+                Text("Hey, \(appState.displayName)")
                     .font(.system(size: 14, weight: .medium, design: .default))
                     .foregroundColor(appState.isDarkMode ? .gray.opacity(0.7) : .gray.opacity(0.6))
+                
+                // Logout Button
+                Button(action: {
+                    appState.logout()
+                }) {
+                    Text("Logout")
+                        .font(.system(size: 12, weight: .medium, design: .default))
+                        .foregroundColor(appState.isDarkMode ? .gray.opacity(0.8) : .gray.opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(appState.isDarkMode ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+                        )
+                }
+                .buttonStyle(.plain)
                 
                 ZStack(alignment: .topTrailing) {
                     Button(action: {

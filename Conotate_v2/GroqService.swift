@@ -15,11 +15,21 @@ class GroqService {
     
     private var apiKey: String {
         // Try to get from environment variable or .env file
-        if let envKey = Config.shared.get("GROQ_API_KEY"), !envKey.isEmpty {
-            return envKey
+        let envKey = Config.shared.get("GROQ_API_KEY")
+        
+        // Debug: Print what we found
+        print("🔍 Looking for GROQ_API_KEY...")
+        print("   Config.shared.get('GROQ_API_KEY') = \(envKey ?? "nil")")
+        print("   System environment GROQ_API_KEY = \(ProcessInfo.processInfo.environment["GROQ_API_KEY"] ?? "nil")")
+        
+        if let key = envKey, !key.isEmpty {
+            print("✅ Found API key (length: \(key.count))")
+            return key
         }
+        
         // No fallback - API key must be set via environment variable
         // This prevents accidentally committing secrets
+        print("❌ GROQ_API_KEY not found!")
         fatalError("GROQ_API_KEY environment variable is not set. Please set it in your environment or .env file.")
     }
     

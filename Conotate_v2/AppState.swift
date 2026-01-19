@@ -22,6 +22,20 @@ class AppState: ObservableObject {
     @Published var userName = "Creator"
     @Published var userAvatar = "👨‍🎨"
     
+    // Computed property to get display name from email
+    var displayName: String {
+        guard let email = currentUserEmail else {
+            return userName
+        }
+        // Extract first name from email (e.g., "varun@unmodal.com" -> "Varun")
+        // Handle cases like "temp.pranit@unmodal.com" -> "Pranit"
+        let emailPrefix = email.components(separatedBy: "@").first ?? ""
+        let nameParts = emailPrefix.components(separatedBy: ".")
+        // Get the last part (actual first name) and capitalize it
+        let firstName = nameParts.last ?? emailPrefix
+        return firstName.prefix(1).uppercased() + firstName.dropFirst().lowercased()
+    }
+    
     // Screen & View State
     @Published var currentView: ScreenView = .home
     @Published var bottomPanelView: ViewState = .expanded

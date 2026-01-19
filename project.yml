@@ -1,0 +1,40 @@
+name: ConotateMacOS
+options:
+  bundleIdPrefix: com.conotate
+  deploymentTarget:
+    macOS: "13.0"
+  developmentLanguage: en
+  xcodeVersion: "14.0"
+
+targets:
+  ConotateMacOS:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: ConotateMacOS
+        excludes:
+          - "**/*.md"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.conotate.macos
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: YES
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+
+schemes:
+  ConotateMacOS:
+    build:
+      targets:
+        ConotateMacOS: all
+    run:
+      config: Debug
+      environmentVariables:
+        GROQ_API_KEY: "" # Set your Groq API key here or via environment variable
