@@ -139,7 +139,7 @@ struct MenuDropdownView: View {
                 .background(dividerColor)
             
             MenuButton(title: "Logout", action: {
-                // TODO: Implement logout
+                appState.logout()
                 isOpen = false
             }, isDestructive: true)
         }

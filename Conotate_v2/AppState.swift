@@ -12,6 +12,10 @@ class AppState: ObservableObject {
     @Published var isNewSectionModalOpen = false
     @Published var pendingContent = ""
     
+    // Authentication State
+    @Published var isAuthenticated = false
+    @Published var currentUserEmail: String? = nil
+    
     // Theme & User State
     @Published var themeColor: Color = Color(hex: "#FAF7F2")
     @Published var isDarkMode = false
@@ -35,12 +39,26 @@ class AppState: ObservableObject {
     private let storage = StorageManager.shared
     
     init() {
-        loadData()
+        // Check if user was previously authenticated
+        if let savedEmail = storage.loadString(key: "conotate-user-email") {
+            isAuthenticated = true
+            currentUserEmail = savedEmail
+            loadData()
+        }
         updateDarkMode()
     }
     
     func loadData() {
-        sections = storage.loadSections()
+        guard let userId = currentUserEmail else {
+            // Clear data if no user is logged in
+            sections = []
+            notes = []
+            return
+        }
+        
+        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        
+        sections = storage.loadSections(userId: normalizedUserId)
         if sections.isEmpty {
             sections = Constants.defaultSections
         }
@@ -52,25 +70,31 @@ class AppState: ObservableObject {
             }
         }
         
-        notes = storage.loadNotes()
+        notes = storage.loadNotes(userId: normalizedUserId)
         if notes.isEmpty {
             notes = Constants.initialNotes
         }
         
-        userName = storage.loadString(key: "conotate-user-name") ?? "Creator"
-        userAvatar = storage.loadString(key: "conotate-user-avatar") ?? "👨‍🎨"
+        userName = storage.loadString(key: "conotate-user-name", userId: normalizedUserId) ?? "Creator"
+        userAvatar = storage.loadString(key: "conotate-user-avatar", userId: normalizedUserId) ?? "👨‍🎨"
         
-        let savedColor = storage.loadString(key: "conotate-theme-color") ?? "#FAF7F2"
+        let savedColor = storage.loadString(key: "conotate-theme-color", userId: normalizedUserId) ?? "#FAF7F2"
         themeColor = Color(hex: savedColor)
         updateDarkMode()
     }
     
     func saveData() {
-        storage.saveSections(sections)
-        storage.saveNotes(notes)
-        storage.saveString(key: "conotate-user-name", value: userName)
-        storage.saveString(key: "conotate-user-avatar", value: userAvatar)
-        storage.saveString(key: "conotate-theme-color", value: themeColor.toHex())
+        guard let userId = currentUserEmail else {
+            return // Don't save if no user is logged in
+        }
+        
+        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        
+        storage.saveSections(sections, userId: normalizedUserId)
+        storage.saveNotes(notes, userId: normalizedUserId)
+        storage.saveString(key: "conotate-user-name", value: userName, userId: normalizedUserId)
+        storage.saveString(key: "conotate-user-avatar", value: userAvatar, userId: normalizedUserId)
+        storage.saveString(key: "conotate-theme-color", value: themeColor.toHex(), userId: normalizedUserId)
     }
     
     func updateDarkMode() {
@@ -230,6 +254,47 @@ class AppState: ObservableObject {
             break
         }
         saveData()
+    }
+    
+    func login(email: String, password: String) -> Bool {
+        let validCredentials = [
+            ("varun@unmodal.com", "testacc1"),
+            ("jamie@unmodal.com", "testacc2"),
+            ("sky@unmodal.com", "testacc3"),
+            ("temp.pranit@unmodal.com", "testacc4")
+        ]
+        
+        if validCredentials.contains(where: { $0.0 == email && $0.1 == password }) {
+            // Clear current data before loading new user's data
+            sections = []
+            notes = []
+            
+            isAuthenticated = true
+            currentUserEmail = email
+            storage.saveString(key: "conotate-user-email", value: email)
+            
+            // Load the new user's data
+            loadData()
+            return true
+        }
+        return false
+    }
+    
+    func logout() {
+        // Save current user's data before logging out
+        saveData()
+        
+        isAuthenticated = false
+        currentUserEmail = nil
+        storage.saveString(key: "conotate-user-email", value: "")
+        
+        // Clear the in-memory data
+        sections = []
+        notes = []
+        userName = "Creator"
+        userAvatar = "👨‍🎨"
+        themeColor = Color(hex: "#FAF7F2")
+        updateDarkMode()
     }
 }
 

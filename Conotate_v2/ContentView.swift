@@ -9,60 +9,67 @@ struct ContentView: View {
     @EnvironmentObject var appState: AppState
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Background
-                appState.themeColor
-                    .ignoresSafeArea()
-                
-                // Dots pattern background
-                DotsPatternView()
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    // Top Bar
-                    TopBarView()
-                        .environmentObject(appState)
-                        .padding(.top, 40)
+        if appState.isAuthenticated {
+            // Main App Content
+            GeometryReader { geometry in
+                ZStack {
+                    // Background
+                    appState.themeColor
+                        .ignoresSafeArea()
                     
-                    // Main Content - takes remaining space
-                    ZStack {
-                        if appState.currentView == .home {
-                            HomeView()
-                                .environmentObject(appState)
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        } else {
-                            LibraryView()
-                                .environmentObject(appState)
-                                .transition(.move(edge: .bottom))
+                    // Dots pattern background
+                    DotsPatternView()
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 0) {
+                        // Top Bar
+                        TopBarView()
+                            .environmentObject(appState)
+                            .padding(.top, 40)
+                        
+                        // Main Content - takes remaining space
+                        ZStack {
+                            if appState.currentView == .home {
+                                HomeView()
+                                    .environmentObject(appState)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                            } else {
+                                LibraryView()
+                                    .environmentObject(appState)
+                                    .transition(.move(edge: .bottom))
+                            }
                         }
+                        .frame(width: geometry.size.width, height: geometry.size.height - 120) // Subtract top bar height
+                        .animation(.easeInOut(duration: 0.4), value: appState.currentView)
                     }
-                    .frame(width: geometry.size.width, height: geometry.size.height - 120) // Subtract top bar height
-                    .animation(.easeInOut(duration: 0.4), value: appState.currentView)
-                }
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                
-                // Modals
-                if appState.isNewSectionModalOpen {
-                    NewSectionModalView()
-                        .environmentObject(appState)
-                }
-                
-                if appState.expandedSectionId != nil {
-                    SectionDetailModalView()
-                        .environmentObject(appState)
-                }
-                
-                // Flying Note Animation
-                if let flyingNote = appState.flyingNote {
-                    FlyingNoteView(note: flyingNote)
-                        .environmentObject(appState)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    
+                    // Modals
+                    if appState.isNewSectionModalOpen {
+                        NewSectionModalView()
+                            .environmentObject(appState)
+                    }
+                    
+                    if appState.expandedSectionId != nil {
+                        SectionDetailModalView()
+                            .environmentObject(appState)
+                    }
+                    
+                    // Flying Note Animation
+                    if let flyingNote = appState.flyingNote {
+                        FlyingNoteView(note: flyingNote)
+                            .environmentObject(appState)
+                    }
                 }
             }
-        }
-        .preferredColorScheme(appState.isDarkMode ? .dark : .light)
-        .onAppear {
-            appState.saveData()
+            .preferredColorScheme(appState.isDarkMode ? .dark : .light)
+            .onAppear {
+                appState.saveData()
+            }
+        } else {
+            // Login View
+            LoginView()
+                .environmentObject(appState)
         }
     }
 }
