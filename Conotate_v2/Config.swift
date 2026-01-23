@@ -91,19 +91,35 @@ class Config {
         print("📋 Total keys loaded: \(env.keys.count)")
     }
     
-    func get(_ key: String) -> String? {
+    func get(_ key: String, userId: String? = nil) -> String? {
         // First check system environment
         if let value = ProcessInfo.processInfo.environment[key], !value.isEmpty {
             print("📦 Found \(key) in system environment")
             return value
         }
+        
+        // Then check user-specific storage (for API keys)
+        if key == "GROQ_API_KEY", let userId = userId {
+            let normalizedUserId = userId.lowercased()
+                .replacingOccurrences(of: "@", with: "-")
+                .replacingOccurrences(of: ".", with: "-")
+            
+            if let userKey = StorageManager.shared.loadString(key: "groq-api-key", userId: normalizedUserId), !userKey.isEmpty {
+                print("👤 Found \(key) in user storage for: \(userId)")
+                return userKey
+            }
+        }
+        
         // Then check .env file
         if let value = env[key], !value.isEmpty {
             print("📄 Found \(key) in .env file")
             return value
         }
-        print("⚠️ \(key) not found in system env or .env file")
-        print("   .env file contents: \(env.keys.joined(separator: ", "))")
+        
+        print("⚠️ \(key) not found in system env, user storage, or .env file")
+        if let userId = userId {
+            print("   Checked user: \(userId)")
+        }
         return nil
     }
 }

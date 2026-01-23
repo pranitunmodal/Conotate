@@ -13,24 +13,41 @@ struct ClassificationResult {
 class GroqService {
     static let shared = GroqService()
     
+    // Store current user ID to check user-specific storage
+    private var currentUserId: String?
+    
+    func setUserId(_ userId: String?) {
+        self.currentUserId = userId
+    }
+    
     private var apiKey: String {
-        // Try to get from environment variable or .env file
-        let envKey = Config.shared.get("GROQ_API_KEY")
-        
-        // Debug: Print what we found
-        print("🔍 Looking for GROQ_API_KEY...")
-        print("   Config.shared.get('GROQ_API_KEY') = \(envKey ?? "nil")")
-        print("   System environment GROQ_API_KEY = \(ProcessInfo.processInfo.environment["GROQ_API_KEY"] ?? "nil")")
-        
-        if let key = envKey, !key.isEmpty {
-            print("✅ Found API key (length: \(key.count))")
-            return key
+        // Priority 1: Check user-specific storage (for TestFlight users)
+        if let userId = currentUserId {
+            let normalizedUserId = userId.lowercased()
+                .replacingOccurrences(of: "@", with: "-")
+                .replacingOccurrences(of: ".", with: "-")
+            
+            if let userKey = StorageManager.shared.loadString(key: "groq-api-key", userId: normalizedUserId), !userKey.isEmpty {
+                print("✅ Found API key from user storage for: \(userId)")
+                return userKey
+            }
         }
         
-        // No fallback - API key must be set via environment variable
-        // This prevents accidentally committing secrets
+        // Priority 2: Check system environment
+        if let envKey = ProcessInfo.processInfo.environment["GROQ_API_KEY"], !envKey.isEmpty {
+            print("✅ Found API key from system environment")
+            return envKey
+        }
+        
+        // Priority 3: Check .env file via Config
+        if let envKey = Config.shared.get("GROQ_API_KEY"), !envKey.isEmpty {
+            print("✅ Found API key from .env file")
+            return envKey
+        }
+        
+        // No API key found
         print("❌ GROQ_API_KEY not found!")
-        fatalError("GROQ_API_KEY environment variable is not set. Please set it in your environment or .env file.")
+        fatalError("GROQ_API_KEY is not set. Please enter your API key in the app settings.")
     }
     
     private let baseURL = "https://api.groq.com/openai/v1/chat/completions"
@@ -258,10 +275,22 @@ Respond ONLY with valid JSON in this exact format:
     }
     
     private func extractJSON(from text: String) -> String {
-        // Try to find JSON object in the text
+        // Try to find JSON object in the text (handle both {} and () formats)
+        // First try curly braces (standard JSON)
         if let startRange = text.range(of: "{"),
-           let endRange = text.range(of: "}", options: .backwards) {
-            return String(text[startRange.lowerBound...endRange.upperBound])
+           let endRange = text.range(of: "}", options: .backwards),
+           startRange.lowerBound < endRange.upperBound {
+            // Use closed range to include both opening and closing braces
+            // endRange.upperBound is safe because range(of:) always returns valid indices
+            return String(text[startRange.lowerBound...endRange.lowerBound])
+        }
+        // Fallback to parentheses (some AI responses use this format)
+        if let startRange = text.range(of: "("),
+           let endRange = text.range(of: ")", options: .backwards),
+           startRange.lowerBound < endRange.upperBound {
+            // Use closed range to include both opening and closing parens
+            // endRange.lowerBound is safe because range(of:) always returns valid indices
+            return String(text[startRange.lowerBound...endRange.lowerBound])
         }
         return text
     }

@@ -60,6 +60,12 @@ struct ContentView: View {
                         FlyingNoteView(note: flyingNote)
                             .environmentObject(appState)
                     }
+                    
+                    // API Key Entry Modal
+                    if appState.needsAPIKey {
+                        APIKeyEntryView()
+                            .environmentObject(appState)
+                    }
                 }
             }
             .preferredColorScheme(appState.isDarkMode ? .dark : .light)

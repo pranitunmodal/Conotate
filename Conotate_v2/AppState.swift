@@ -15,6 +15,7 @@ class AppState: ObservableObject {
     // Authentication State
     @Published var isAuthenticated = false
     @Published var currentUserEmail: String? = nil
+    @Published var needsAPIKey = false
     
     // Theme & User State
     @Published var themeColor: Color = Color(hex: "#FAF7F2")
@@ -50,65 +51,128 @@ class AppState: ObservableObject {
     // Animation State
     @Published var flyingNote: FlyingNoteState? = nil
     
-    private let storage = StorageManager.shared
+    private let storage = HybridStorageManager.shared
+    private let localStorage = StorageManager.shared // For backward compatibility
     
     init() {
         // Check if user was previously authenticated
-        if let savedEmail = storage.loadString(key: "conotate-user-email") {
-            isAuthenticated = true
-            currentUserEmail = savedEmail
-            loadData()
+        if let savedEmail = storage.loadString(key: "conotate-user-email"), !savedEmail.isEmpty {
+            // Check if we have a Supabase session
+            if SupabaseService.shared.isConfigured {
+                Task {
+                    do {
+                        // Try to get current user from Supabase
+                        if let supabaseUserId = try await SupabaseService.shared.getCurrentUserId() {
+                            // User is still authenticated in Supabase
+                            await MainActor.run {
+                                isAuthenticated = true
+                                currentUserEmail = savedEmail
+                                GroqService.shared.setUserId(savedEmail)
+                                loadData(supabaseUserId: supabaseUserId)
+                            }
+                        } else {
+                            // No Supabase session, clear auth state
+                            await MainActor.run {
+                                isAuthenticated = false
+                                currentUserEmail = nil
+                                storage.saveString(key: "conotate-user-email", value: "")
+                            }
+                        }
+                    } catch {
+                        // Supabase session expired or invalid
+                        await MainActor.run {
+                            isAuthenticated = false
+                            currentUserEmail = nil
+                            storage.saveString(key: "conotate-user-email", value: "")
+                        }
+                    }
+                }
+            } else {
+                // Supabase not configured, use local auth (backward compatibility)
+                isAuthenticated = true
+                currentUserEmail = savedEmail
+                GroqService.shared.setUserId(savedEmail)
+                loadData()
+            }
         }
         updateDarkMode()
     }
     
-    func loadData() {
-        guard let userId = currentUserEmail else {
+    func loadData(supabaseUserId: String? = nil) {
+        guard let email = currentUserEmail else {
             // Clear data if no user is logged in
             sections = []
             notes = []
             return
         }
         
-        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
-        
-        sections = storage.loadSections(userId: normalizedUserId)
-        if sections.isEmpty {
-            sections = Constants.defaultSections
+        // Use Supabase user ID if available, otherwise fall back to normalized email
+        let userId: String
+        if let supabaseId = supabaseUserId ?? storage.loadString(key: "conotate-supabase-user-id") {
+            userId = supabaseId
+        } else {
+            // Fallback for backward compatibility
+            userId = email.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
         }
         
-        // Ensure Unsorted section exists
-        if !sections.contains(where: { $0.id == "unsorted" }) {
-            if let unsortedTemplate = Constants.defaultSections.first(where: { $0.id == "unsorted" }) {
-                sections.append(unsortedTemplate)
+        // For local storage (API keys, preferences), still use normalized email
+        let normalizedEmail = email.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        
+        // Load data asynchronously from Supabase (or local storage)
+        Task {
+            let loadedSections = await storage.loadSections(userId: userId)
+            let loadedNotes = await storage.loadNotes(userId: userId)
+            
+            await MainActor.run {
+                sections = loadedSections.isEmpty ? Constants.defaultSections : loadedSections
+                
+                // Ensure Unsorted section exists
+                if !sections.contains(where: { $0.id == "unsorted" }) {
+                    if let unsortedTemplate = Constants.defaultSections.first(where: { $0.id == "unsorted" }) {
+                        sections.append(unsortedTemplate)
+                    }
+                }
+                
+                notes = loadedNotes.isEmpty ? Constants.initialNotes : loadedNotes
+                
+                userName = storage.loadString(key: "conotate-user-name", userId: normalizedEmail) ?? "Creator"
+                userAvatar = storage.loadString(key: "conotate-user-avatar", userId: normalizedEmail) ?? "👨‍🎨"
+                
+                let savedColor = storage.loadString(key: "conotate-theme-color", userId: normalizedEmail) ?? "#FAF7F2"
+                themeColor = Color(hex: savedColor)
+                updateDarkMode()
+                
+                // Check if user has API key
+                checkAPIKey()
+                
+                // Set user ID for GroqService (use email for API key lookup)
+                GroqService.shared.setUserId(email)
             }
         }
-        
-        notes = storage.loadNotes(userId: normalizedUserId)
-        if notes.isEmpty {
-            notes = Constants.initialNotes
-        }
-        
-        userName = storage.loadString(key: "conotate-user-name", userId: normalizedUserId) ?? "Creator"
-        userAvatar = storage.loadString(key: "conotate-user-avatar", userId: normalizedUserId) ?? "👨‍🎨"
-        
-        let savedColor = storage.loadString(key: "conotate-theme-color", userId: normalizedUserId) ?? "#FAF7F2"
-        themeColor = Color(hex: savedColor)
-        updateDarkMode()
     }
     
     func saveData() {
-        guard let userId = currentUserEmail else {
+        guard let email = currentUserEmail else {
             return // Don't save if no user is logged in
         }
         
-        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        // Use Supabase user ID if available, otherwise fall back to normalized email
+        let userId: String
+        if let supabaseId = storage.loadString(key: "conotate-supabase-user-id") {
+            userId = supabaseId
+        } else {
+            // Fallback for backward compatibility
+            userId = email.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        }
         
-        storage.saveSections(sections, userId: normalizedUserId)
-        storage.saveNotes(notes, userId: normalizedUserId)
-        storage.saveString(key: "conotate-user-name", value: userName, userId: normalizedUserId)
-        storage.saveString(key: "conotate-user-avatar", value: userAvatar, userId: normalizedUserId)
-        storage.saveString(key: "conotate-theme-color", value: themeColor.toHex(), userId: normalizedUserId)
+        // For local storage (preferences), use normalized email
+        let normalizedEmail = email.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        
+        storage.saveSections(sections, userId: userId)
+        storage.saveNotes(notes, userId: userId)
+        storage.saveString(key: "conotate-user-name", value: userName, userId: normalizedEmail)
+        storage.saveString(key: "conotate-user-avatar", value: userAvatar, userId: normalizedEmail)
+        storage.saveString(key: "conotate-theme-color", value: themeColor.toHex(), userId: normalizedEmail)
     }
     
     func updateDarkMode() {
@@ -123,7 +187,21 @@ class AppState: ObservableObject {
             updatedAt: Date().timeIntervalSince1970
         )
         notes.insert(newNote, at: 0)
-        saveData()
+        
+        // Save to Supabase (or local storage)
+        Task {
+            guard let email = currentUserEmail else { return }
+            // Use Supabase user ID if available, otherwise fall back to normalized email
+            let userId: String
+            if let supabaseId = storage.loadString(key: "conotate-supabase-user-id") {
+                userId = supabaseId
+            } else {
+                userId = email.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+            }
+            try? await storage.createNote(newNote, userId: userId)
+        }
+        
+        saveData() // Also save locally for immediate UI update
         
         // Trigger flying note animation
         triggerFlyingNote(text: text, sectionId: sectionId)
@@ -270,37 +348,95 @@ class AppState: ObservableObject {
         saveData()
     }
     
-    func login(email: String, password: String) -> Bool {
-        let validCredentials = [
-            ("varun@unmodal.com", "testacc1"),
-            ("jamie@unmodal.com", "testacc2"),
-            ("sky@unmodal.com", "testacc3"),
-            ("temp.pranit@unmodal.com", "testacc4")
-        ]
-        
-        if validCredentials.contains(where: { $0.0 == email && $0.1 == password }) {
-            // Clear current data before loading new user's data
-            sections = []
-            notes = []
-            
-            isAuthenticated = true
-            currentUserEmail = email
-            storage.saveString(key: "conotate-user-email", value: email)
-            
-            // Load the new user's data
-            loadData()
-            return true
+    func signUp(email: String, password: String) async throws {
+        // Use Supabase Auth - no fallback to hardcoded credentials
+        guard SupabaseService.shared.isConfigured else {
+            throw LoginError.supabaseNotConfigured
         }
-        return false
+        
+        // Sign up with Supabase Auth
+        let supabaseUserId = try await SupabaseService.shared.signUp(email: email, password: password)
+        
+        // Clear current data before loading new user's data
+        sections = []
+        notes = []
+        
+        isAuthenticated = true
+        currentUserEmail = email
+        storage.saveString(key: "conotate-user-email", value: email)
+        storage.saveString(key: "conotate-supabase-user-id", value: supabaseUserId)
+        
+        // Set user ID for GroqService (use email for API key lookup)
+        GroqService.shared.setUserId(email)
+        
+        // Load the new user's data using Supabase user ID
+        loadData(supabaseUserId: supabaseUserId)
+    }
+    
+    func login(email: String, password: String) async throws {
+        // Use Supabase Auth - no fallback to hardcoded credentials
+        guard SupabaseService.shared.isConfigured else {
+            throw LoginError.supabaseNotConfigured
+        }
+        
+        // Sign in with Supabase Auth
+        let supabaseUserId = try await SupabaseService.shared.signIn(email: email, password: password)
+        
+        // Clear current data before loading new user's data
+        sections = []
+        notes = []
+        
+        isAuthenticated = true
+        currentUserEmail = email
+        storage.saveString(key: "conotate-user-email", value: email)
+        storage.saveString(key: "conotate-supabase-user-id", value: supabaseUserId)
+        
+        // Set user ID for GroqService (use email for API key lookup)
+        GroqService.shared.setUserId(email)
+        
+        // Load the new user's data using Supabase user ID
+        loadData(supabaseUserId: supabaseUserId)
+    }
+    
+    enum LoginError: Error, LocalizedError {
+        case supabaseNotConfigured
+        case invalidCredentials
+        case networkError
+        
+        var errorDescription: String? {
+            switch self {
+            case .supabaseNotConfigured:
+                return "Supabase is not configured. Please check your settings."
+            case .invalidCredentials:
+                return "Invalid email or password"
+            case .networkError:
+                return "Network error. Please check your connection."
+            }
+        }
     }
     
     func logout() {
         // Save current user's data before logging out
         saveData()
         
+        // Sign out from Supabase if configured
+        if SupabaseService.shared.isConfigured {
+            Task {
+                try? await SupabaseService.shared.signOut()
+            }
+        }
+        
+        // Remember if user needed API key (so we can show it on login page)
+        let hadNoAPIKey = needsAPIKey
+        let loggedOutEmail = currentUserEmail
+        
         isAuthenticated = false
         currentUserEmail = nil
         storage.saveString(key: "conotate-user-email", value: "")
+        storage.saveString(key: "conotate-supabase-user-id", value: "")
+        
+        // Clear GroqService user ID
+        GroqService.shared.setUserId(nil)
         
         // Clear the in-memory data
         sections = []
@@ -308,7 +444,62 @@ class AppState: ObservableObject {
         userName = "Creator"
         userAvatar = "👨‍🎨"
         themeColor = Color(hex: "#FAF7F2")
+        needsAPIKey = false
+        
+        // If user logged out without API key, store email for login page
+        if hadNoAPIKey, let email = loggedOutEmail {
+            storage.saveString(key: "pending-api-key-email", value: email)
+        }
+        
         updateDarkMode()
+    }
+    
+    func checkAPIKey() {
+        guard let userId = currentUserEmail else {
+            needsAPIKey = false
+            return
+        }
+        
+        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        
+        // Check if user has saved API key
+        let savedKey = storage.loadString(key: "groq-api-key", userId: normalizedUserId)
+        
+        // Also check system environment and .env file
+        let envKey = Config.shared.get("GROQ_API_KEY")
+        
+        // If no key found anywhere, show prompt
+        needsAPIKey = (savedKey == nil || savedKey!.isEmpty) && (envKey == nil || envKey!.isEmpty)
+    }
+    
+    func saveAPIKey(_ key: String) {
+        guard let userId = currentUserEmail else { return }
+        
+        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        
+        // Save to user-specific storage
+        storage.saveString(key: "groq-api-key", value: key.trimmingCharacters(in: .whitespaces), userId: normalizedUserId)
+        
+        // Update GroqService with user ID (so it can access the key)
+        GroqService.shared.setUserId(userId)
+        
+        // Update needsAPIKey flag
+        needsAPIKey = false
+        
+        print("✅ API key saved for user: \(userId)")
+    }
+    
+    func getUserAPIKey() -> String? {
+        guard let userId = currentUserEmail else { return nil }
+        
+        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+        
+        // Check user-specific storage first
+        if let savedKey = storage.loadString(key: "groq-api-key", userId: normalizedUserId), !savedKey.isEmpty {
+            return savedKey
+        }
+        
+        return nil
     }
 }
 

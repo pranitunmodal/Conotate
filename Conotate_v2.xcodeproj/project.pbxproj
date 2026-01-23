@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0D04D7312F1AF87B00A8769A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0D04D7302F1AF87B00A8769A /* Assets.xcassets */; };
+		0D61900F2F217E0C0058F937 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 0DE574F22F21526D007C7D90 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0D61900F2F217E0C0058F937 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			);
 			name = Conotate_v2;
 			packageProductDependencies = (
+				0DE574F22F21526D007C7D90 /* Supabase */,
 			);
 			productName = Conotate_v2;
 			productReference = 0D04D6712F19D44C00A8769A /* Conotate_v2.app */;
@@ -100,6 +103,9 @@
 			);
 			mainGroup = 0D04D6682F19D44C00A8769A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0DE574F12F21526D007C7D90 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0D04D6722F19D44C00A8769A /* Products */;
 			projectDirPath = "";
@@ -255,9 +261,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Conotate_v2/Conotate_v2.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 3Z9V2W678L;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -270,7 +277,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 5;
 				PRODUCT_BUNDLE_IDENTIFIER = "Blank.Conotate-v2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -288,9 +296,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Conotate_v2/Conotate_v2.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 3Z9V2W678L;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -303,7 +312,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 5;
 				PRODUCT_BUNDLE_IDENTIFIER = "Blank.Conotate-v2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -338,6 +348,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0DE574F12F21526D007C7D90 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0DE574F22F21526D007C7D90 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0DE574F12F21526D007C7D90 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0D04D6692F19D44C00A8769A /* Project object */;
 }
