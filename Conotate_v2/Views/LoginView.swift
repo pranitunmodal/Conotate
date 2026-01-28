@@ -9,17 +9,13 @@ struct LoginView: View {
     @EnvironmentObject var appState: AppState
     @State private var email: String = ""
     @State private var password: String = ""
-    @State private var apiKey: String = ""
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
-    @State private var showAPIKeyField: Bool = false
-    @State private var needsAPIKeyForAccount: Bool = false
     @FocusState private var focusedField: Field?
     
     enum Field {
         case email
         case password
-        case apiKey
     }
     
     var body: some View {
@@ -101,60 +97,8 @@ struct LoginView: View {
                                     )
                                     .focused($focusedField, equals: .password)
                                     .onSubmit {
-                                        if showAPIKeyField {
-                                            focusedField = .apiKey
-                                        } else {
-                                            handleLogin()
-                                        }
+                                        handleLogin()
                                     }
-                            }
-                            
-                            // API Key Field (shown if account needs it)
-                            if showAPIKeyField || needsAPIKeyForAccount {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Text("Groq API Key")
-                                            .font(.system(size: 12, weight: .medium, design: .default))
-                                            .foregroundColor(.black.opacity(0.7))
-                                        
-                                        Spacer()
-                                        
-                                        Text("(Optional)")
-                                            .font(.system(size: 11, weight: .regular, design: .default))
-                                            .foregroundColor(.gray.opacity(0.6))
-                                    }
-                                    
-                                    SecureField("Enter your API key", text: $apiKey)
-                                        .textFieldStyle(PlainTextFieldStyle())
-                                        .font(.system(size: 13, weight: .regular, design: .monospaced))
-                                        .foregroundColor(.black.opacity(0.85))
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 12)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color.white.opacity(0.8))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(focusedField == .apiKey ? Color.black.opacity(0.2) : Color.black.opacity(0.1), lineWidth: 1)
-                                                )
-                                        )
-                                        .focused($focusedField, equals: .apiKey)
-                                        .onSubmit {
-                                            handleLogin()
-                                        }
-                                    
-                                    // Help text
-                                    HStack(spacing: 4) {
-                                        Text("Get your API key from")
-                                            .font(.system(size: 11, weight: .regular, design: .default))
-                                            .foregroundColor(.gray.opacity(0.6))
-                                        
-                                        Link("console.groq.com", destination: URL(string: "https://console.groq.com/")!)
-                                            .font(.system(size: 11, weight: .medium, design: .default))
-                                            .foregroundColor(.blue)
-                                    }
-                                    .padding(.top, -4)
-                                }
                             }
                             
                             // Error Message
@@ -209,17 +153,6 @@ struct LoginView: View {
             }
         }
         .preferredColorScheme(appState.isDarkMode ? .dark : .light)
-        .onAppear {
-            // Check if there's a pending email that needs API key
-            if let pendingEmail = StorageManager.shared.loadString(key: "pending-api-key-email"),
-               !pendingEmail.isEmpty {
-                email = pendingEmail
-                needsAPIKeyForAccount = true
-                showAPIKeyField = true
-                // Clear the pending email flag
-                StorageManager.shared.saveString(key: "pending-api-key-email", value: "")
-            }
-        }
     }
     
     private func handleLogin() {
@@ -242,39 +175,15 @@ struct LoginView: View {
         
         let trimmedEmail = email.trimmingCharacters(in: .whitespaces)
         
-        // Check if account needs API key (before login attempt)
-        let normalizedUserId = trimmedEmail.lowercased()
-            .replacingOccurrences(of: "@", with: "-")
-            .replacingOccurrences(of: ".", with: "-")
-        
-        let savedKey = StorageManager.shared.loadString(key: "groq-api-key", userId: normalizedUserId)
-        let hasAPIKey = savedKey != nil && !(savedKey?.isEmpty ?? true)
-        
-        // If account doesn't have API key and user hasn't entered one, show the field
-        if !hasAPIKey && apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-            showAPIKeyField = true
-            needsAPIKeyForAccount = true
-            // Don't proceed with login yet, let them enter API key
-            return
-        }
-        
         // Attempt login with Supabase Auth
         Task {
             do {
                 try await appState.login(email: trimmedEmail, password: password)
                 
-                // Login successful - save API key if provided
-                if !apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-                    appState.saveAPIKey(apiKey.trimmingCharacters(in: .whitespaces))
-                }
-                
                 // Clear form on main thread
                 await MainActor.run {
                     email = ""
                     password = ""
-                    apiKey = ""
-                    showAPIKeyField = false
-                    needsAPIKeyForAccount = false
                     showError = false
                 }
             } catch {
@@ -323,18 +232,10 @@ struct LoginView: View {
             do {
                 try await appState.signUp(email: trimmedEmail, password: password)
                 
-                // Sign up successful - save API key if provided
-                if !apiKey.trimmingCharacters(in: .whitespaces).isEmpty {
-                    appState.saveAPIKey(apiKey.trimmingCharacters(in: .whitespaces))
-                }
-                
                 // Clear form on main thread
                 await MainActor.run {
                     email = ""
                     password = ""
-                    apiKey = ""
-                    showAPIKeyField = false
-                    needsAPIKeyForAccount = false
                     showError = false
                 }
             } catch {

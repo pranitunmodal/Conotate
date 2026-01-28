@@ -15,7 +15,6 @@ class AppState: ObservableObject {
     // Authentication State
     @Published var isAuthenticated = false
     @Published var currentUserEmail: String? = nil
-    @Published var needsAPIKey = false
     
     // Theme & User State
     @Published var themeColor: Color = Color(hex: "#FAF7F2")
@@ -65,10 +64,9 @@ class AppState: ObservableObject {
                         if let supabaseUserId = try await SupabaseService.shared.getCurrentUserId() {
                             // User is still authenticated in Supabase
                             await MainActor.run {
-                                isAuthenticated = true
-                                currentUserEmail = savedEmail
-                                GroqService.shared.setUserId(savedEmail)
-                                loadData(supabaseUserId: supabaseUserId)
+                            isAuthenticated = true
+                            currentUserEmail = savedEmail
+                            loadData(supabaseUserId: supabaseUserId)
                             }
                         } else {
                             // No Supabase session, clear auth state
@@ -91,7 +89,6 @@ class AppState: ObservableObject {
                 // Supabase not configured, use local auth (backward compatibility)
                 isAuthenticated = true
                 currentUserEmail = savedEmail
-                GroqService.shared.setUserId(savedEmail)
                 loadData()
             }
         }
@@ -141,12 +138,6 @@ class AppState: ObservableObject {
                 let savedColor = storage.loadString(key: "conotate-theme-color", userId: normalizedEmail) ?? "#FAF7F2"
                 themeColor = Color(hex: savedColor)
                 updateDarkMode()
-                
-                // Check if user has API key
-                checkAPIKey()
-                
-                // Set user ID for GroqService (use email for API key lookup)
-                GroqService.shared.setUserId(email)
             }
         }
     }
@@ -366,9 +357,6 @@ class AppState: ObservableObject {
         storage.saveString(key: "conotate-user-email", value: email)
         storage.saveString(key: "conotate-supabase-user-id", value: supabaseUserId)
         
-        // Set user ID for GroqService (use email for API key lookup)
-        GroqService.shared.setUserId(email)
-        
         // Load the new user's data using Supabase user ID
         loadData(supabaseUserId: supabaseUserId)
     }
@@ -390,9 +378,6 @@ class AppState: ObservableObject {
         currentUserEmail = email
         storage.saveString(key: "conotate-user-email", value: email)
         storage.saveString(key: "conotate-supabase-user-id", value: supabaseUserId)
-        
-        // Set user ID for GroqService (use email for API key lookup)
-        GroqService.shared.setUserId(email)
         
         // Load the new user's data using Supabase user ID
         loadData(supabaseUserId: supabaseUserId)
@@ -426,17 +411,10 @@ class AppState: ObservableObject {
             }
         }
         
-        // Remember if user needed API key (so we can show it on login page)
-        let hadNoAPIKey = needsAPIKey
-        let loggedOutEmail = currentUserEmail
-        
         isAuthenticated = false
         currentUserEmail = nil
         storage.saveString(key: "conotate-user-email", value: "")
         storage.saveString(key: "conotate-supabase-user-id", value: "")
-        
-        // Clear GroqService user ID
-        GroqService.shared.setUserId(nil)
         
         // Clear the in-memory data
         sections = []
@@ -444,62 +422,8 @@ class AppState: ObservableObject {
         userName = "Creator"
         userAvatar = "👨‍🎨"
         themeColor = Color(hex: "#FAF7F2")
-        needsAPIKey = false
-        
-        // If user logged out without API key, store email for login page
-        if hadNoAPIKey, let email = loggedOutEmail {
-            storage.saveString(key: "pending-api-key-email", value: email)
-        }
         
         updateDarkMode()
-    }
-    
-    func checkAPIKey() {
-        guard let userId = currentUserEmail else {
-            needsAPIKey = false
-            return
-        }
-        
-        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
-        
-        // Check if user has saved API key
-        let savedKey = storage.loadString(key: "groq-api-key", userId: normalizedUserId)
-        
-        // Also check system environment and .env file
-        let envKey = Config.shared.get("GROQ_API_KEY")
-        
-        // If no key found anywhere, show prompt
-        needsAPIKey = (savedKey == nil || savedKey!.isEmpty) && (envKey == nil || envKey!.isEmpty)
-    }
-    
-    func saveAPIKey(_ key: String) {
-        guard let userId = currentUserEmail else { return }
-        
-        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
-        
-        // Save to user-specific storage
-        storage.saveString(key: "groq-api-key", value: key.trimmingCharacters(in: .whitespaces), userId: normalizedUserId)
-        
-        // Update GroqService with user ID (so it can access the key)
-        GroqService.shared.setUserId(userId)
-        
-        // Update needsAPIKey flag
-        needsAPIKey = false
-        
-        print("✅ API key saved for user: \(userId)")
-    }
-    
-    func getUserAPIKey() -> String? {
-        guard let userId = currentUserEmail else { return nil }
-        
-        let normalizedUserId = userId.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
-        
-        // Check user-specific storage first
-        if let savedKey = storage.loadString(key: "groq-api-key", userId: normalizedUserId), !savedKey.isEmpty {
-            return savedKey
-        }
-        
-        return nil
     }
 }
 

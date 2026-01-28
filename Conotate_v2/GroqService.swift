@@ -13,305 +13,142 @@ struct ClassificationResult {
 class GroqService {
     static let shared = GroqService()
     
-    // Store current user ID to check user-specific storage
-    private var currentUserId: String?
-    
-    func setUserId(_ userId: String?) {
-        self.currentUserId = userId
-    }
-    
-    private var apiKey: String {
-        // Priority 1: Check user-specific storage (for TestFlight users)
-        if let userId = currentUserId {
-            let normalizedUserId = userId.lowercased()
-                .replacingOccurrences(of: "@", with: "-")
-                .replacingOccurrences(of: ".", with: "-")
-            
-            if let userKey = StorageManager.shared.loadString(key: "groq-api-key", userId: normalizedUserId), !userKey.isEmpty {
-                print("✅ Found API key from user storage for: \(userId)")
-                return userKey
-            }
-        }
-        
-        // Priority 2: Check system environment
-        if let envKey = ProcessInfo.processInfo.environment["GROQ_API_KEY"], !envKey.isEmpty {
-            print("✅ Found API key from system environment")
-            return envKey
-        }
-        
-        // Priority 3: Check .env file via Config
-        if let envKey = Config.shared.get("GROQ_API_KEY"), !envKey.isEmpty {
-            print("✅ Found API key from .env file")
-            return envKey
-        }
-        
-        // No API key found
-        print("❌ GROQ_API_KEY not found!")
-        fatalError("GROQ_API_KEY is not set. Please enter your API key in the app settings.")
-    }
-    
-    private let baseURL = "https://api.groq.com/openai/v1/chat/completions"
-    
     private init() {}
     
+    // Get access token for Edge Function authentication
+    private func getAccessToken() async throws -> String {
+        guard let token = try await SupabaseService.shared.getAccessToken() else {
+            throw GroqError.authenticationRequired
+        }
+        return token
+    }
+    
+    // Get Supabase anon key for Edge Function authentication
+    private func getSupabaseAnonKey() -> String {
+        return ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? 
+               Config.shared.get("SUPABASE_ANON_KEY") ?? ""
+    }
+    
+    // Get Edge Function URL
+    private func getEdgeFunctionURL(functionName: String) -> String? {
+        guard SupabaseService.shared.isConfigured else {
+            return nil
+        }
+        let baseURL = SupabaseService.shared.edgeFunctionURL
+        // Remove /groq-proxy and add the function name
+        return baseURL.replacingOccurrences(of: "/groq-proxy", with: "/\(functionName)")
+    }
+    
+    // Classify a note using the backend Edge Function
+    func classifyNote(_ text: String, availableSections: [Section]) async throws -> ClassificationResult {
+        guard let edgeURL = getEdgeFunctionURL(functionName: "classify-note") else {
+            throw GroqError.supabaseNotConfigured
+        }
+        
+        guard let url = URL(string: edgeURL) else {
+            throw GroqError.invalidURL
+        }
+        
+        // Prepare request body
+        let requestBody: [String: Any] = [
+            "text": text,
+            "availableSections": availableSections.map { ["id": $0.id, "name": $0.name] }
+        ]
+        
+        let accessToken = try await getAccessToken()
+        let supabaseAnonKey = getSupabaseAnonKey()
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        if !supabaseAnonKey.isEmpty {
+            request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GroqError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("❌ Classification Edge Function error (\(httpResponse.statusCode)): \(errorText)")
+            throw GroqError.invalidResponse
+        }
+        
+        // Parse response
+        struct ClassificationResponse: Codable {
+            let sectionId: String
+            let confidence: Double
+        }
+        
+        let classificationResponse = try JSONDecoder().decode(ClassificationResponse.self, from: data)
+        return ClassificationResult(
+            sectionId: classificationResponse.sectionId,
+            confidence: classificationResponse.confidence
+        )
+    }
+    
+    // Generate description for a section using the backend Edge Function
     func generateDescription(for notes: [Note], sectionName: String) async throws -> String {
         guard !notes.isEmpty else {
             return "This is the \(sectionName) section. Add notes to generate a summary."
         }
         
-        let notesText = notes.prefix(5).map { $0.text }.joined(separator: "\n")
-        let prompt = """
-        Based on these notes from the "\(sectionName)" section, generate a brief, natural description (1-2 sentences):
+        guard let edgeURL = getEdgeFunctionURL(functionName: "generate-description") else {
+            throw GroqError.supabaseNotConfigured
+        }
         
-        \(notesText)
-        
-        Description:
-        """
-        
-        guard let url = URL(string: baseURL) else {
+        guard let url = URL(string: edgeURL) else {
             throw GroqError.invalidURL
         }
         
+        // Prepare request body
         let requestBody: [String: Any] = [
-            "model": "llama-3.1-8b-instant",
-            "messages": [
-                ["role": "user", "content": prompt]
-            ],
-            "max_tokens": 100,
-            "temperature": 0.7
+            "notes": notes.map { ["text": $0.text] },
+            "sectionName": sectionName
         ]
+        
+        // Get fresh access token
+        let accessToken = try await getAccessToken()
+        let supabaseAnonKey = getSupabaseAnonKey()
+        
+        // Debug logging
+        print("🔑 generate-description: URL=\(edgeURL)")
+        print("🔑 generate-description: Token prefix=\(accessToken.prefix(20))...")
+        print("🔑 generate-description: Has apikey=\(!supabaseAnonKey.isEmpty)")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        if !supabaseAnonKey.isEmpty {
+            request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw GroqError.invalidResponse
         }
         
-        struct GroqResponse: Codable {
-            let choices: [Choice]
-            
-            struct Choice: Codable {
-                let message: Message
-                
-                struct Message: Codable {
-                    let content: String
-                }
-            }
-        }
-        
-        let groqResponse = try JSONDecoder().decode(GroqResponse.self, from: data)
-        return groqResponse.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? "A collection of notes about \(sectionName)."
-    }
-    
-    func classifyNote(_ text: String, availableSections: [Section]) async throws -> ClassificationResult {
-        // Parse commands first
-        let (cleanText, forcedCategory, _) = parseCommands(text, availableSections: availableSections)
-        
-        if let forced = forcedCategory {
-            return ClassificationResult(sectionId: forced, confidence: 1.0)
-        }
-        
-        // Classify with AI
-        let aiResult = try await classifyWithAI(cleanText, availableSections: availableSections)
-        return aiResult
-    }
-    
-    private func classifyWithAI(_ text: String, availableSections: [Section]) async throws -> ClassificationResult {
-        guard let url = URL(string: baseURL) else {
-            throw GroqError.invalidURL
-        }
-        
-        let systemPrompt = """
-You are a classification assistant for a personal organization app.
-Classify the user's input into one of these categories:
-- "task": Actionable items, todos, reminders, things to do
-- "idea": Creative thoughts, possibilities, brainstorming, "what if" scenarios, imaginative concepts
-- "note": Information to remember, facts, meeting notes, summaries
-- "unsorted": When unclear, gibberish, ambiguous, or doesn't fit other categories
-
-CRITICAL RULES:
-1. If text is gibberish (not real words/phrases like "adhcfsbjhd", "zidwudd") → "unsorted" with confidence < 0.6
-2. If text is ambiguous (single words like "banana" without context) → "unsorted" with confidence < 0.6
-3. If text doesn't clearly fit any category → "unsorted" with confidence < 0.6
-4. Creative/whimsical concepts (e.g., "cat powered laundry") → "idea" with high confidence
-5. Action items (e.g., "get eggs") → "task" with high confidence
-6. Information/facts (e.g., "Meeting at 3pm") → "note" with high confidence
-
-Respond ONLY with valid JSON in this exact format:
-{"category": "task|idea|note|unsorted", "confidence": 0.0-1.0}
-"""
-        
-        let requestBody: [String: Any] = [
-            "model": "llama-3.1-8b-instant",
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": text]
-            ],
-            "max_tokens": 150,
-            "temperature": 0.1
-        ]
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
+        guard httpResponse.statusCode == 200 else {
+            let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("❌ Description Edge Function error (\(httpResponse.statusCode)): \(errorText)")
             throw GroqError.invalidResponse
         }
         
-        // Decode response using Codable
-        struct GroqResponse: Codable {
-            let choices: [Choice]
-            
-            struct Choice: Codable {
-                let message: Message
-                
-                struct Message: Codable {
-                    let content: String
-                }
-            }
+        // Parse response
+        struct DescriptionResponse: Codable {
+            let description: String
         }
         
-        let groqResponse = try JSONDecoder().decode(GroqResponse.self, from: data)
-        let content = groqResponse.choices.first?.message.content ?? ""
-        
-        // Parse JSON from the response (may have extra text)
-        let jsonString = extractJSON(from: content)
-        guard let jsonData = jsonString.data(using: .utf8) else {
-            return fallbackClassification(text, availableSections: availableSections)
-        }
-        
-        struct AIClassificationResult: Codable {
-            let category: String
-            let confidence: Double
-        }
-        
-        let aiResult = try JSONDecoder().decode(AIClassificationResult.self, from: jsonData)
-        
-        // Validate the category
-        guard !aiResult.category.isEmpty else {
-            return fallbackClassification(text, availableSections: availableSections)
-        }
-        
-        // Ensure confidence is in valid range
-        let validatedConfidence = max(0.0, min(1.0, aiResult.confidence))
-        
-        // Map category to section ID
-        let categoryLower = aiResult.category.lowercased()
-        var sectionId: String
-        
-        if categoryLower == "task" || categoryLower == "tasks" {
-            sectionId = "tasks"
-        } else if categoryLower == "idea" || categoryLower == "ideas" {
-            sectionId = "ideas"
-        } else if categoryLower == "note" || categoryLower == "notes" {
-            sectionId = "notes"
-        } else if categoryLower == "unsorted" {
-            sectionId = "unsorted"
-        } else {
-            // Try to find matching user-defined section
-            if let matchingSection = availableSections.first(where: { $0.name.lowercased() == categoryLower }) {
-                sectionId = matchingSection.id
-            } else {
-                return fallbackClassification(text, availableSections: availableSections)
-            }
-        }
-        
-        // Low confidence goes to unsorted
-        if validatedConfidence < 0.6 {
-            sectionId = "unsorted"
-        }
-        
-        return ClassificationResult(sectionId: sectionId, confidence: validatedConfidence)
-    }
-    
-    func parseCommands(_ text: String, availableSections: [Section]) -> (cleanText: String, forcedCategory: String?, sectionName: String?) {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        
-        // Check for /task, /idea, /note commands
-        if trimmed.hasPrefix("/task") || trimmed.lowercased().hasPrefix("/tasks") {
-            let clean = String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-            return (clean, "tasks", nil)
-        }
-        
-        if trimmed.hasPrefix("/idea") || trimmed.lowercased().hasPrefix("/ideas") {
-            let clean = String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-            return (clean, "ideas", nil)
-        }
-        
-        if trimmed.hasPrefix("/note") || trimmed.lowercased().hasPrefix("/notes") {
-            let clean = String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-            return (clean, "notes", nil)
-        }
-        
-        // Check for @SectionName content pattern
-        if let atRange = trimmed.range(of: #"@(\w+)\s+(.+)"#, options: .regularExpression) {
-            let match = String(trimmed[atRange])
-            let parts = match.split(separator: " ", maxSplits: 1)
-            if parts.count == 2 {
-                let sectionName = String(parts[0].dropFirst()) // Remove @
-                let content = String(parts[1])
-                
-                // Find matching section
-                if let section = availableSections.first(where: { $0.name.lowercased() == sectionName.lowercased() }) {
-                    return (content, section.id, sectionName)
-                }
-            }
-        }
-        
-        return (trimmed, nil, nil)
-    }
-    
-    private func extractJSON(from text: String) -> String {
-        // Try to find JSON object in the text (handle both {} and () formats)
-        // First try curly braces (standard JSON)
-        if let startRange = text.range(of: "{"),
-           let endRange = text.range(of: "}", options: .backwards),
-           startRange.lowerBound < endRange.upperBound {
-            // Use closed range to include both opening and closing braces
-            // endRange.upperBound is safe because range(of:) always returns valid indices
-            return String(text[startRange.lowerBound...endRange.lowerBound])
-        }
-        // Fallback to parentheses (some AI responses use this format)
-        if let startRange = text.range(of: "("),
-           let endRange = text.range(of: ")", options: .backwards),
-           startRange.lowerBound < endRange.upperBound {
-            // Use closed range to include both opening and closing parens
-            // endRange.lowerBound is safe because range(of:) always returns valid indices
-            return String(text[startRange.lowerBound...endRange.lowerBound])
-        }
-        return text
-    }
-    
-    private func fallbackClassification(_ text: String, availableSections: [Section]) -> ClassificationResult {
-        // Conservative fallback - default to unsorted
-        let lower = text.lowercased().trimmingCharacters(in: .whitespaces)
-        
-        // Very basic keyword matching as last resort
-        let taskKeywords = ["get", "buy", "call", "email", "todo", "task", "do", "make"]
-        let ideaKeywords = ["what if", "idea", "concept", "brainstorm", "imagine"]
-        
-        if taskKeywords.contains(where: { lower.contains($0) }) {
-            return ClassificationResult(sectionId: "tasks", confidence: 0.5)
-        }
-        
-        if ideaKeywords.contains(where: { lower.contains($0) }) {
-            return ClassificationResult(sectionId: "ideas", confidence: 0.5)
-        }
-        
-        return ClassificationResult(sectionId: "unsorted", confidence: 0.4)
+        let descriptionResponse = try JSONDecoder().decode(DescriptionResponse.self, from: data)
+        return descriptionResponse.description
     }
 }
 
@@ -319,4 +156,6 @@ enum GroqError: Error {
     case invalidURL
     case invalidResponse
     case decodingError
+    case supabaseNotConfigured
+    case authenticationRequired
 }

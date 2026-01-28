@@ -86,6 +86,29 @@ class SupabaseService {
         return session.user.id.uuidString
     }
     
+    func getAccessToken() async throws -> String? {
+        guard let client = client else {
+            return nil
+        }
+        // Get the current session's access token for Edge Function authentication
+        // The session property automatically refreshes expired tokens
+        do {
+            let session = try await client.auth.session
+            return session.accessToken
+        } catch {
+            // If session is invalid, try to refresh it
+            print("⚠️ Session error, attempting refresh: \(error.localizedDescription)")
+            // The Supabase SDK should handle refresh automatically, but if it fails,
+            // we return nil to trigger authentication error
+            return nil
+        }
+    }
+    
+    var edgeFunctionURL: String {
+        // Construct Edge Function URL
+        return "\(supabaseURL)/functions/v1/groq-proxy"
+    }
+    
     // MARK: - Sections
     // Based on: https://supabase.com/docs/reference/swift/database/fetch-data
     
