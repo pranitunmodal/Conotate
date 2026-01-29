@@ -12,9 +12,24 @@ if ! command -v supabase &> /dev/null; then
     exit 1
 fi
 
-# Deploy the function
-echo "📦 Deploying function..."
-supabase functions deploy groq-proxy
+# Deploy Edge Functions from backend/edge-functions directory
+echo "📦 Deploying Edge Functions..."
+echo ""
+
+# Note: Supabase CLI expects functions in supabase/functions/ by default
+# If your CLI is configured differently, adjust paths accordingly
+
+# Deploy classify-note function
+echo "Deploying classify-note..."
+supabase functions deploy classify-note --project-ref $(supabase status | grep "API URL" | awk '{print $3}' | cut -d'/' -f3 | cut -d'.' -f1) || supabase functions deploy classify-note
+
+# Deploy generate-description function
+echo "Deploying generate-description..."
+supabase functions deploy generate-description --project-ref $(supabase status | grep "API URL" | awk '{print $3}' | cut -d'/' -f3 | cut -d'.' -f1) || supabase functions deploy generate-description
+
+# Legacy groq-proxy (deprecated)
+echo "Deploying groq-proxy (legacy)..."
+supabase functions deploy groq-proxy --project-ref $(supabase status | grep "API URL" | awk '{print $3}' | cut -d'/' -f3 | cut -d'.' -f1) || supabase functions deploy groq-proxy
 
 if [ $? -eq 0 ]; then
     echo ""
