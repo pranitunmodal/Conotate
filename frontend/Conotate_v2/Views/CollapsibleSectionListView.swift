@@ -73,11 +73,15 @@ struct SectionRowView: View {
         return notes.sorted { $0.updatedAt > $1.updatedAt }
     }
     
+    private var sectionRowBackground: Color {
+        appState.isDarkMode ? Color.white.opacity(0.08) : Color.white.opacity(0.3)
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Section header
+            // Section header (collapsible)
             Button(action: {
-                withAnimation {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     if isExpanded {
                         appState.expandedSectionId = nil
                     } else {
@@ -86,9 +90,9 @@ struct SectionRowView: View {
                 }
             }) {
                 HStack {
-                    Text(isExpanded ? "▼" : ">")
+                    Text(isExpanded ? "▼" : "▸")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.gray.opacity(0.6))
+                        .foregroundColor(appState.isDarkMode ? .white.opacity(0.6) : .gray.opacity(0.6))
                         .frame(width: 20)
                     
                     Text(section.name)
@@ -102,7 +106,7 @@ struct SectionRowView: View {
             }
             .buttonStyle(.plain)
             
-            // Section notes (when expanded)
+            // Section notes (when expanded) – smooth collapse/expand
             if isExpanded {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(sectionNotes) { note in
@@ -112,32 +116,39 @@ struct SectionRowView: View {
                     }
                 }
                 .padding(.bottom, 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Color.white.opacity(0.3))
+        .background(sectionRowBackground)
         .cornerRadius(6)
         .padding(.vertical, 4)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
     }
 }
 
 struct NoteRowView: View {
+    @EnvironmentObject var appState: AppState
     let note: Note
     
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Text("✓")
                 .font(.system(size: 12))
-                .foregroundColor(.gray.opacity(0.6))
+                .foregroundColor(appState.isDarkMode ? .white.opacity(0.5) : .gray.opacity(0.6))
             
             Text(Utils.formatDate(note.updatedAt))
                 .font(.system(size: 11))
-                .foregroundColor(.gray.opacity(0.6))
+                .foregroundColor(appState.isDarkMode ? .white.opacity(0.5) : .gray.opacity(0.6))
             
             Text(note.text)
                 .font(.system(size: 13))
                 .foregroundColor(.primary)
             
             Spacer()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            appState.editingNoteId = note.id
         }
     }
 }

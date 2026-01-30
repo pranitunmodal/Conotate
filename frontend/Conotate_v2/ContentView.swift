@@ -26,7 +26,7 @@ struct ContentView: View {
                     HStack(spacing: 12) {
                         Text("Hey, \(appState.displayName)")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.gray.opacity(0.6))
+                            .foregroundColor(appState.isDarkMode ? .white.opacity(0.6) : .gray.opacity(0.6))
                         
                         Button(action: {
                             showAccountMenu.toggle()
@@ -34,7 +34,7 @@ struct ContentView: View {
                             Text(appState.userAvatar)
                                 .font(.system(size: 16))
                                 .frame(width: 32, height: 32)
-                                .background(Color.gray.opacity(0.1))
+                                .background(appState.isDarkMode ? Color.white.opacity(0.15) : Color.gray.opacity(0.1))
                                 .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
@@ -67,6 +67,14 @@ struct ContentView: View {
             .onAppear {
                 appState.saveData()
             }
+            .overlay {
+                if appState.editingNoteId != nil {
+                    EditNoteModalView()
+                        .environmentObject(appState)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
+            }
+            .animation(.spring(response: 0.38, dampingFraction: 0.82), value: appState.editingNoteId != nil)
         } else {
             // Login View
             LoginView()

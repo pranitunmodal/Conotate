@@ -49,6 +49,7 @@ class AppState: ObservableObject {
     
     // Detailed Modal State
     @Published var expandedSectionId: String? = nil
+    @Published var editingNoteId: String? = nil
     
     // Animation State
     @Published var flyingNote: FlyingNoteState? = nil

@@ -23,22 +23,6 @@ struct TopBarView: View {
                     .font(.system(size: 14, weight: .medium, design: .default))
                     .foregroundColor(appState.isDarkMode ? .gray.opacity(0.7) : .gray.opacity(0.6))
                 
-                // Logout Button
-                Button(action: {
-                    appState.logout()
-                }) {
-                    Text("Logout")
-                        .font(.system(size: 12, weight: .medium, design: .default))
-                        .foregroundColor(appState.isDarkMode ? .gray.opacity(0.8) : .gray.opacity(0.7))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(appState.isDarkMode ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                        )
-                }
-                .buttonStyle(.plain)
-                
                 ZStack(alignment: .topTrailing) {
                     Button(action: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -131,6 +115,14 @@ struct MenuDropdownView: View {
                 appState.currentView = .settings
                 isOpen = false
             }
+            
+            Divider()
+                .background(dividerColor)
+            
+            MenuButton(title: "Log out", action: {
+                appState.logout()
+                isOpen = false
+            }, isDestructive: true)
         }
         .frame(width: 200)
         .background(menuBackground)

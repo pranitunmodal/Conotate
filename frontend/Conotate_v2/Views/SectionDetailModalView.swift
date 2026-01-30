@@ -207,6 +207,10 @@ struct SectionDetailModalView: View {
             
             ForEach(groupedNotes[dateLabel] ?? []) { note in
                 noteRowView(note: note)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        appState.editingNoteId = note.id
+                    }
             }
         }
     }

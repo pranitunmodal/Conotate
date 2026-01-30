@@ -20,7 +20,6 @@ struct SettingsView: View {
                     accountSection
                     dataSection
                     connectorsSection
-                    sessionSection
                 }
                 .padding(.bottom, 24)
             }
@@ -42,7 +41,7 @@ struct SettingsView: View {
         HStack {
             Text("Settings")
                 .font(.system(size: 20, weight: .semibold, design: .serif))
-                .foregroundColor(.black.opacity(0.8))
+                .foregroundColor(appState.isDarkMode ? .white.opacity(0.9) : .black.opacity(0.8))
             
             Spacer()
             
@@ -64,7 +63,7 @@ struct SettingsView: View {
             HStack {
                 Text("Manage connectors for external services.")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.6))
+                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.6) : .gray.opacity(0.6))
                 Spacer()
                 TypewriterButton(variant: .secondary) {
                     appState.addConnector(name: "New Connector")
@@ -81,7 +80,7 @@ struct SettingsView: View {
             if appState.connectors.isEmpty {
                 Text("No connectors yet.")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.6))
+                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.6) : .gray.opacity(0.6))
                     .padding(.vertical, 8)
             } else {
                 VStack(spacing: 8) {
@@ -90,10 +89,10 @@ struct SettingsView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "link")
                                     .font(.system(size: 12))
-                                    .foregroundColor(.gray.opacity(0.6))
+                                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.5) : .gray.opacity(0.6))
                                 Text(connector.name)
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.gray.opacity(0.8))
+                                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.85) : .gray.opacity(0.8))
                             }
                             
                             Spacer()
@@ -103,7 +102,7 @@ struct SettingsView: View {
                             } label: {
                                 Image(systemName: "trash")
                                     .font(.system(size: 11))
-                                    .foregroundColor(.gray.opacity(0.5))
+                                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.5) : .gray.opacity(0.5))
                             }
                             .buttonStyle(.plain)
                         }
@@ -111,10 +110,10 @@ struct SettingsView: View {
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.white.opacity(0.6))
+                                .fill(appState.isDarkMode ? Color.white.opacity(0.1) : Color.white.opacity(0.6))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                                        .stroke(appState.isDarkMode ? Color.white.opacity(0.1) : Color.gray.opacity(0.1), lineWidth: 1)
                                 )
                         )
                     }
@@ -128,7 +127,7 @@ struct SettingsView: View {
             HStack {
                 Text("Dark Mode")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.8))
+                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.85) : .gray.opacity(0.8))
                 Spacer()
                 Toggle("", isOn: Binding(
                     get: { appState.isDarkMode },
@@ -147,11 +146,11 @@ struct SettingsView: View {
                 HStack {
                     Text("Profile Settings")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.gray.opacity(0.8))
+                        .foregroundColor(appState.isDarkMode ? .white.opacity(0.85) : .gray.opacity(0.8))
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10))
-                        .foregroundColor(.gray.opacity(0.4))
+                        .foregroundColor(appState.isDarkMode ? .white.opacity(0.5) : .gray.opacity(0.4))
                 }
             }
             .buttonStyle(.plain)
@@ -178,35 +177,22 @@ struct SettingsView: View {
         }
     }
     
-    private var sessionSection: some View {
-        settingsCard(title: "SESSION") {
-            Button {
-                appState.logout()
-            } label: {
-                Text("Logout")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.red)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-    
     private func settingsCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.system(size: 10, weight: .bold))
                 .tracking(2)
-                .foregroundColor(.gray.opacity(0.5))
+                .foregroundColor(appState.isDarkMode ? .white.opacity(0.5) : .gray.opacity(0.5))
             
             content()
         }
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(hex: "#F3F2EA"))
+                .fill(appState.isDarkMode ? Color.white.opacity(0.08) : Color(hex: "#F3F2EA"))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: "#E8E6DC"), lineWidth: 1)
+                        .stroke(appState.isDarkMode ? Color.white.opacity(0.12) : Color(hex: "#E8E6DC"), lineWidth: 1)
                 )
         )
     }
@@ -215,7 +201,7 @@ struct SettingsView: View {
         HStack {
             Text(title)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.gray.opacity(0.8))
+                .foregroundColor(appState.isDarkMode ? .white.opacity(0.85) : .gray.opacity(0.8))
             Spacer()
         }
     }

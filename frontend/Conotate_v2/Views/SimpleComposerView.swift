@@ -48,7 +48,7 @@ struct SimpleComposerView: View {
             HStack {
                 Text(mode == .entry ? "Adding to →" : (mode == .search ? "Searching..." : "Settings"))
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.gray.opacity(0.6))
+                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.6) : .gray.opacity(0.6))
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -325,10 +325,10 @@ struct SimpleComposerView: View {
     }
 
     private var inputField: some View {
-        HStack {
+        HStack(spacing: 8) {
             if mode == .search {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray.opacity(0.5))
+                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.5) : .gray.opacity(0.5))
                     .padding(.leading, 16)
             }
             
@@ -409,14 +409,25 @@ struct SimpleComposerView: View {
                 return .ignored
             }
             .padding(.vertical, 12)
+            
+            // Voice input (dummy – not hooked up)
+            Button(action: {}) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(appState.isDarkMode ? .white.opacity(0.6) : .gray.opacity(0.6))
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .help("Voice input (coming soon)")
+            .padding(.trailing, 8)
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.5))
+        .background(appState.isDarkMode ? Color.white.opacity(0.08) : Color.white.opacity(0.5))
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                .stroke(appState.isDarkMode ? Color.white.opacity(0.12) : Color.gray.opacity(0.2), lineWidth: 1)
         )
     }
 

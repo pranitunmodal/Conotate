@@ -190,6 +190,10 @@ struct SectionCardView: View {
                                                     .lineLimit(2)
                                             }
                                             .padding(.horizontal, 24)
+                                            .contentShape(Rectangle())
+                                            .onTapGesture(count: 2) {
+                                                appState.editingNoteId = note.id
+                                            }
                                         }
                                     }
                                 } else {
