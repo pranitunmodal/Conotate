@@ -9,8 +9,10 @@ import Combine
 class AppState: ObservableObject {
     @Published var sections: [Section] = []
     @Published var notes: [Note] = []
+    @Published var connectors: [Connector] = []
     @Published var isNewSectionModalOpen = false
     @Published var pendingContent = ""
+    @Published var shouldShowImportDialog = false
     
     // Authentication State
     @Published var isAuthenticated = false
@@ -138,6 +140,14 @@ class AppState: ObservableObject {
                 
                 let savedColor = storage.loadString(key: "conotate-theme-color", userId: normalizedEmail) ?? "#FAF7F2"
                 themeColor = Color(hex: savedColor)
+                
+                if let connectorsData = storage.loadString(key: "conotate-connectors", userId: normalizedEmail),
+                   let data = connectorsData.data(using: .utf8),
+                   let decoded = try? JSONDecoder().decode([Connector].self, from: data) {
+                    connectors = decoded
+                } else {
+                    connectors = []
+                }
                 updateDarkMode()
             }
         }
@@ -165,6 +175,10 @@ class AppState: ObservableObject {
         storage.saveString(key: "conotate-user-name", value: userName, userId: normalizedEmail)
         storage.saveString(key: "conotate-user-avatar", value: userAvatar, userId: normalizedEmail)
         storage.saveString(key: "conotate-theme-color", value: themeColor.toHex(), userId: normalizedEmail)
+        if let encoded = try? JSONEncoder().encode(connectors),
+           let json = String(data: encoded, encoding: .utf8) {
+            storage.saveString(key: "conotate-connectors", value: json, userId: normalizedEmail)
+        }
     }
     
     func updateDarkMode() {
@@ -273,6 +287,21 @@ class AppState: ObservableObject {
             saveData()
         }
     }
+
+    func deleteNote(id: String) {
+        notes.removeAll { $0.id == id }
+        Task {
+            guard let email = currentUserEmail else { return }
+            let userId: String
+            if let supabaseId = storage.loadString(key: "conotate-supabase-user-id") {
+                userId = supabaseId
+            } else {
+                userId = email.lowercased().replacingOccurrences(of: "@", with: "-").replacingOccurrences(of: ".", with: "-")
+            }
+            try? await storage.deleteNote(id: id, userId: userId)
+        }
+        saveData()
+    }
     
     func deleteSection(id: String, exportFirst: Bool) {
         if exportFirst {
@@ -331,9 +360,23 @@ class AppState: ObservableObject {
             userName = value
         case "avatar":
             userAvatar = value
+        case "connector":
+            addConnector(name: value)
         default:
             break
         }
+        saveData()
+    }
+
+    func addConnector(name: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = trimmedName.isEmpty ? "New Connector" : trimmedName
+        connectors.append(Connector(name: displayName))
+        saveData()
+    }
+
+    func removeConnector(id: String) {
+        connectors.removeAll { $0.id == id }
         saveData()
     }
     
@@ -417,6 +460,7 @@ class AppState: ObservableObject {
         // Clear the in-memory data
         sections = []
         notes = []
+        connectors = []
         userName = "Creator"
         userAvatar = "👨‍🎨"
         themeColor = Color(hex: "#FAF7F2")

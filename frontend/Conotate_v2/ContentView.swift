@@ -7,6 +7,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
+    @State private var showAccountMenu = false
     
     var body: some View {
         if appState.isAuthenticated {
@@ -28,33 +29,38 @@ struct ContentView: View {
                             .foregroundColor(.gray.opacity(0.6))
                         
                         Button(action: {
-                            appState.logout()
+                            showAccountMenu.toggle()
                         }) {
-                            Text("Logout")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.gray.opacity(0.7))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.gray.opacity(0.1))
-                                )
+                            Text(appState.userAvatar)
+                                .font(.system(size: 16))
+                                .frame(width: 32, height: 32)
+                                .background(Color.gray.opacity(0.1))
+                                .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
-                        
-                        Text(appState.userAvatar)
-                            .font(.system(size: 16))
-                            .frame(width: 32, height: 32)
-                            .background(Color.gray.opacity(0.1))
-                            .clipShape(Circle())
+                        .popover(isPresented: $showAccountMenu, arrowEdge: .top) {
+                            MenuDropdownView(isOpen: $showAccountMenu)
+                                .environmentObject(appState)
+                        }
                     }
                     .padding(.trailing, 16)
                     .padding(.top, 16)
                 }
                 
                 // Main Content
-                HomeView()
-                    .environmentObject(appState)
+                Group {
+                    switch appState.currentView {
+                    case .home:
+                        HomeView()
+                    case .library:
+                        LibraryView()
+                    case .profile:
+                        ProfileView()
+                    case .settings:
+                        SettingsView()
+                    }
+                }
+                .environmentObject(appState)
             }
             .background(appState.themeColor)
             .preferredColorScheme(appState.isDarkMode ? .dark : .light)

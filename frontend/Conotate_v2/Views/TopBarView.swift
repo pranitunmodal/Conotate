@@ -93,8 +93,6 @@ struct TopBarView: View {
 struct MenuDropdownView: View {
     @Binding var isOpen: Bool
     @EnvironmentObject var appState: AppState
-    @State private var showImportDialog = false
-    @State private var importText = ""
     
     // Computed properties to simplify type-checking
     private var accountTextColor: Color {
@@ -119,8 +117,7 @@ struct MenuDropdownView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Account Header
-            Text("ACCOUNT")
+            Text("MENU")
                 .font(.system(size: 10, weight: .bold))
                 .tracking(2)
                 .foregroundColor(accountTextColor)
@@ -130,45 +127,13 @@ struct MenuDropdownView: View {
             Divider()
                 .background(dividerColor)
             
-            // Menu Items
-            MenuButton(title: darkModeTitle) {
-                appState.toggleDarkMode()
+            MenuButton(title: "Settings") {
+                appState.currentView = .settings
                 isOpen = false
             }
-            
-            MenuButton(title: "Profile Settings") {
-                // TODO: Implement profile settings
-                isOpen = false
-            }
-            
-            MenuButton(title: "Import Data") {
-                showImportDialog = true
-                isOpen = false
-            }
-            
-            MenuButton(title: "Export Data") {
-                appState.exportData()
-                isOpen = false
-            }
-            
-            Divider()
-                .background(dividerColor)
-            
-            MenuButton(title: "Logout", action: {
-                appState.logout()
-                isOpen = false
-            }, isDestructive: true)
         }
-        .frame(width: 224)
+        .frame(width: 200)
         .background(menuBackground)
-        .overlay(
-            Group {
-                if showImportDialog {
-                    ImportDialogView(text: $importText, isPresented: $showImportDialog)
-                        .environmentObject(appState)
-                }
-            }
-        )
     }
     
     private var menuBackground: some View {

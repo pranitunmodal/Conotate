@@ -264,6 +264,15 @@ struct SectionDetailModalView: View {
                             .lineSpacing(4)
                         
                         Spacer()
+
+                        Button {
+                            appState.deleteNote(id: note.id)
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10))
+                                .foregroundColor(.gray.opacity(0.4))
+                        }
+                        .buttonStyle(.plain)
                         
                         Text(timeString(from: note.updatedAt))
                             .font(.system(size: 9))

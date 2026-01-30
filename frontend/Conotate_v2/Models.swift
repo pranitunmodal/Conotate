@@ -57,6 +57,20 @@ struct Note: Identifiable, Codable, Equatable {
     }
 }
 
+struct Connector: Identifiable, Codable, Equatable {
+    let id: String
+    var name: String
+    var createdAt: TimeInterval
+    
+    init(id: String = UUID().uuidString,
+         name: String,
+         createdAt: TimeInterval = Date().timeIntervalSince1970) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+    }
+}
+
 enum ViewState {
     case collapsed
     case expanded
@@ -65,6 +79,8 @@ enum ViewState {
 enum ScreenView {
     case home
     case library
+    case profile
+    case settings
 }
 
 enum FilterGroup1 {
